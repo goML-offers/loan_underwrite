@@ -12,4 +12,4 @@ COPY . /app
 EXPOSE 8501
 
 ENTRYPOINT ["streamlit","run"]
-CMD ["app.py"]
+CMD ["ui.py"]
