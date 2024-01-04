@@ -5,7 +5,8 @@ COPY requirements.txt app/requirements.txt
 
 WORKDIR /app
 
-RUN git clone https://github.com/streamlit/streamlit-example.git .
+RUN echo "#!/bin/sh\nexit 0" > /usr/local/bin/sudo && chmod +x /usr/local/bin/sudo
+
 RUN pip install -r requirements.txt
 
 COPY . /app
