@@ -428,9 +428,36 @@ def verify_password(input_password, hashed_password):
     print(input_password,hashed_password,hash_password(input_password))
     print(type(hashed_password),type(hash_password(input_password)))
     return hash_password(input_password) == hashed_password
+
+def add_value_labels(ax, spacing=5):
+    for rect in ax.patches:
+        y_value = rect.get_y() + rect.get_height() / 2
+        x_value = rect.get_width()
+        label = "{:.2f}".format(x_value)
+        ax.text(x_value + spacing, y_value, label, ha="center", va="center")
+
+def customize_x_axis_scale(ax):
+    ax.set_xlim(0, ax.get_xlim()[1] * 1.2)  
+    ax.get_xaxis().get_major_formatter().set_scientific(False)
+
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+    # ax.set_xticks(range(len(df.columns)))
+    # ax.set_xticklabels([f'{float(label)/1e6:.2f}M' for label in df.columns])
+    # # ax.set_xticklabels([f'{float(df.loc[label][col])/1e6:.2f}M' for label in df.index for col in df.columns])
+
+
+
+
+
+
+
+
+
+
+
 with st.sidebar:
     st.image("genpactlogo.png")
-    selected = option_menu("EXPOSURE MANAGEMENT", ["SignUP","Login Page","Workspaces", "Data Upload", 'Update Data'], menu_icon="chevron-down", default_index=0)
+    selected = option_menu("EXPOSURE MANAGEMENT", ["SignUP","Login Page","Workspaces", "Data Upload", 'Update Data','Analytics'], menu_icon="chevron-down", default_index=0)
 
 st.session_state.result = None
 
@@ -680,3 +707,62 @@ if st.session_state.user_id !=0:
                     file_name=f"updated_data_{selected_table}.csv",
                     key='download_button'
                 )
+    if selected=="Analytics":
+        RegionPeril=['Expense Load','Benchmark Premium']
+        Total_2023=[129534.8469,424704.416]
+        Total_2024=[129534.8469,424704.416]
+        df = pd.DataFrame({"2023": Total_2023, "2024": Total_2024}, index=RegionPeril)
+        st.subheader("Expense and Benchmark Premium")
+        # st.pyplot(df.plot.barh(stacked=True).figure)
+        ax_expense = df.plot.barh(stacked=True).axes
+        # add_value_labels(ax_expense)
+        customize_x_axis_scale(ax_expense)
+        st.pyplot(ax_expense.figure)
+
+        RegionPeril=['PML_100','PML_200','PML_250','PML_500','PML_1000','PML_5000','PML_10000']
+        Caribbean_WS_2024=[0,997.4620521,7419.063574,21441.58958,45640.72319,210895.263,472065.0367]
+        Caribbean_WS_2023=[0,997.4620521,7419.063574,21441.58958,45640.72319,210895.263,472065.0367]
+        Gulf_WS_2024=[0,875.4702494,5507.581388,21299.47437,53449.20346,1354916.444,2482467.437]
+        Gulf_WS_2023=[0,875.4702494,5507.581388,21299.47437,53449.20346,1354916.444,2482467.437]
+        Mid_Atlantic_WS_2024=[0,0,0,0,8368.179776,148009.3684,3764710.831]
+        Mid_Atlantic_WS_2023=[0,0,0,0,8368.179776,148009.3684,3764710.831]
+        Northeast_WS_2024=[0,0,0,0,0,11800.41176,41404.72609]	
+        Northeast_WS_2023=[0,0,0,0,0,11800.41176,41404.72609]
+        Southeast_WS_2024=[5534576.412,10197016.26,11847840.73,15965175.35,19311136.71,25149224.32,25268754.06]
+        Southeast_WS_2023=[5534576.412,10197016.26,11847840.73,15965175.35,19311136.71,25149224.32,25268754.06]
+        US_OW_2023=[9968.92673,17882.01069,20114.31658,30425.58091,50556.70339,98899.71806,1087589.49]
+        US_OW_2024=[9968.92673,17882.01069,20114.31658,30425.58091,50556.70339,98899.71806,1087589.49]	
+        US_WiS_2023=[39111.23722,45075.10115,47872.22547,53177.6549,59620.88419,93234.0313,112586.4406]
+        US_WiS_2024=[39111.23722,45075.10115,47872.22547,53177.6549,59620.88419,93234.0313,112586.4406]
+        # for col in [Caribbean_WS_2024, Caribbean_WS_2023, Gulf_WS_2024, Gulf_WS_2023, 
+        #     Mid_Atlantic_WS_2024, Mid_Atlantic_WS_2023, Northeast_WS_2024, 
+        #     Northeast_WS_2023, Southeast_WS_2024, Southeast_WS_2023, 
+        #     US_OW_2023, US_OW_2024, US_WiS_2023, US_WiS_2024]:
+        #     for i in range(len(col)):
+        #         col[i] /=  1000000
+        
+        df = pd.DataFrame({
+    "Caribbean WS_2024": Caribbean_WS_2024, 
+    "Caribbean WS_2023": Caribbean_WS_2023,
+    "Gulf WS_2024": Gulf_WS_2024,
+    "Gulf WS_2023": Gulf_WS_2023,
+    "Mid Atlantic WS_2024": Mid_Atlantic_WS_2024,
+    "Mid Atlantic WS_2023": Mid_Atlantic_WS_2023,
+    "Northeast WS_2024": Northeast_WS_2024,
+    "Northeast WS_2023": Northeast_WS_2023,
+    "Southeast WS_2024": Southeast_WS_2024,
+    "Southeast WS_2023": Southeast_WS_2023,
+    "US OW_2023": US_OW_2023,
+    "US OW_2024": US_OW_2024,
+    "US WiS_2023": US_WiS_2023,
+    "US WiS_2024": US_WiS_2024}, index=RegionPeril)
+        st.subheader("PML Values for Different Regions")
+        # st.pyplot(df.plot.barh(stacked=True).figure)
+        ax_expense = df.plot.barh(stacked=True).axes
+        # add_value_labels(ax_expense)
+        customize_x_axis_scale(ax_expense)
+        st.pyplot(ax_expense.figure,use_container_width=True)
+
+
+
+            
