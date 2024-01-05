@@ -713,6 +713,16 @@ if st.session_state.user_id !=0:
                     file_name=f"updated_data_{selected_table}.csv",
                     key='download_button'
                 )
+                cursor.execute(f"SELECT top 100 from table57 ;")
+                selected_table_policy = cursor.fetchone()[0]
+
+                table_data_policy = fetch_data(selected_table_policy)
+               
+                st.write("Lookup Table")
+                st.dataframe(data=table_data_policy)
+                
+
+
     if selected=="Analytics":
         RegionPeril=['Expense Load','Benchmark Premium']
         Total_2023=[129534.8469,424704.416]

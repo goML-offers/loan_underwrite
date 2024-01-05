@@ -11,3 +11,4 @@ protobuf>=3.20.0,<4.0.0
 altair==4.1.0
 matplotlib
 openpyxl
+mplcursors
