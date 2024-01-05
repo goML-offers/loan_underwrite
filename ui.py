@@ -190,6 +190,27 @@ def fetch_data(table_name):
 
     return pd.DataFrame(data, columns=column_names)
 
+def fetch_data_1(table_name):
+    connection_params = {
+        'host': 'database-1.cmeaoe1g4zcd.ap-south-1.rds.amazonaws.com',
+        'port': '5432',
+        'database': 'postgres',
+        'user': 'postgres',
+        'password': 'postgres'
+    }
+
+    connection = psycopg2.connect(**connection_params)
+    cursor = connection.cursor()
+
+    query = f"SELECT * FROM table57 ;"
+    cursor.execute(query)
+    data = cursor.fetchall()
+
+    column_names = [desc[0] for desc in cursor.description]
+
+    connection.close()
+
+    return pd.DataFrame(data, columns=column_names)
 # Function to update data in a table in the database
 def update_data(original_data, updated_data, table_name, columns):
     connection_params = {
@@ -713,10 +734,11 @@ if st.session_state.user_id !=0:
                     file_name=f"updated_data_{selected_table}.csv",
                     key='download_button'
                 )
-                cursor.execute(f"SELECT top 100 from table57 ;")
+                cursor.execute(f"SELECT * from table57 limit 50;")
                 selected_table_policy = cursor.fetchone()[0]
+                table_data_policy= fetch_data_1(selected_table_policy)
 
-                table_data_policy = fetch_data(selected_table_policy)
+
                
                 st.write("Lookup Table")
                 st.dataframe(data=table_data_policy)
