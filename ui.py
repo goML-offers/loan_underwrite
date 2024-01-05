@@ -600,11 +600,11 @@ if st.session_state.user_id !=0:
             selected_sheet = st.selectbox("Select Sheet:", sheet_names, key='sheet_dropdown')
             
             data = pd.read_excel(file_info, sheet_name=selected_sheet)
-            file_name=file_name.replace('.xlsx','')
+            file_name=file_name.replace(' ','_').replace('.xlsx','')
             #  filename_sheetname
             file_name=f"{file_name}_{selected_sheet}"
             st.session_state.uploaded_file_name = file_name
-            data.columns = [col.lower().replace(' ', '_') for col in data.columns]
+            data.columns = [col.lower().replace(' ', '_').replace('/','') for col in data.columns]
 
             st.write("### Select Attributes")
             all_columns_option = "Select All"
