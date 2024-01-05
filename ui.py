@@ -13,6 +13,8 @@ from streamlit_authenticator import Authenticate
 import hashlib
 import os
 from dotenv import load_dotenv
+import mplcursors
+
 
 
 load_dotenv()
@@ -446,7 +448,11 @@ def customize_x_axis_scale(ax):
     # # ax.set_xticklabels([f'{float(df.loc[label][col])/1e6:.2f}M' for label in df.index for col in df.columns])
 
 
-
+def show_annotation(sel):
+    bar = sel.artist[sel.target.index]
+    sel.annotation.set_text(f'{sel.artist.get_label()}: {bar.get_height():.1f}')
+    sel.annotation.xy = (bar.get_x() + bar.get_width() / 2, bar.get_y() + bar.get_height() / 2)
+    sel.annotation.get_bbox_patch().set_alpha(0.8)
 
 
 
@@ -456,7 +462,7 @@ def customize_x_axis_scale(ax):
 
 
 with st.sidebar:
-    st.image("genpactlogo.png")
+    st.image("genpactlogo.png",width=170)
     selected = option_menu("EXPOSURE MANAGEMENT", ["SignUP","Login Page","Workspaces", "Data Upload", 'Update Data','Analytics'], menu_icon="chevron-down", default_index=0)
 
 st.session_state.result = None
@@ -761,6 +767,9 @@ if st.session_state.user_id !=0:
         ax_expense = df.plot.barh(stacked=True).axes
         # add_value_labels(ax_expense)
         customize_x_axis_scale(ax_expense)
+        
+        mplcursors.cursor(hover=True)
+
         st.pyplot(ax_expense.figure,use_container_width=True)
 
 
