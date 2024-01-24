@@ -14,6 +14,11 @@ import hashlib
 import os
 from dotenv import load_dotenv
 import mplcursors
+from fuzzywuzzy import process
+import time
+from sqlalchemy import create_engine
+import fuzzymatcher
+import mysql.connector as sql
 
 
 
@@ -49,7 +54,7 @@ def create_workspace(id, workspace_name,user_id):
     cursor = connection.cursor()
     workspace_created = False
     try:
-        cursor.execute("INSERT INTO workspaces (id, workspace_name,user_id) VALUES (%s, %s,%s) RETURNING id;", (id, workspace_name,user_id))
+        cursor.execute("INSERT INTO genpact.workspaces (id, workspace_name,user_id) VALUES (%s, %s,%s) RETURNING id;", (id, workspace_name,user_id))
         workspace_id = cursor.fetchone()[0]
         connection.commit()
         st.success(f'Workspace "{workspace_name}" created successfully .')
@@ -85,7 +90,7 @@ def get_workspace_history(user_id):
 
     print("User id inside get_workspace_history",user_id)
     # Retrieve workspace history
-    cursor.execute(f"SELECT DISTINCT workspace_name FROM workspace_history WHERE user_id={user_id};")
+    cursor.execute(f"SELECT DISTINCT workspace_name FROM genpact.workspace_history WHERE user_id={user_id};")
     workspace_history = cursor.fetchall()
     st.session_state.user_id = user_id
 
@@ -110,7 +115,7 @@ def create_dynamic_table(table_name, columns, data):
 
     columns_lower = [col.lower().replace(' ', '_') for col in columns]
     columns_lower += ["id", "location"]
-
+ 
     if "id" not in columns_lower:
         columns_lower = ["id"] + columns_lower
 
@@ -125,7 +130,8 @@ def create_dynamic_table(table_name, columns, data):
 
     column_definitions = ", ".join([f'"{col}" VARCHAR' for col in columns_lower])
     
-    create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({column_definitions});"
+    create_table_query = f"CREATE TABLE IF NOT EXISTS genpact.{table_name} ({column_definitions});"
+    # create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_definitions)});"
     cursor.execute(create_table_query)
 
     col_dict=dict()
@@ -158,8 +164,8 @@ def create_dynamic_table(table_name, columns, data):
         else:
             print("Skipping row due to missing location-related columns.")
         values = "', '".join(str(row[col]) for col in columns_lower if col in row.index)
-        insert_query = f"INSERT INTO {table_name} ({', '.join(columns_lower)}) VALUES ('{values}');"
-
+        insert_query = f"INSERT INTO genpact.{table_name} ({', '.join(columns_lower)}) VALUES ('{values}');"
+        # insert_query = f"INSERT INTO {table_name} ({', '.join(columns_lower)}) VALUES ({', '.join(['?']*len(values))});"
         print(insert_query)
         cursor.execute(insert_query)
 
@@ -180,7 +186,7 @@ def fetch_data(table_name):
     connection = psycopg2.connect(**connection_params)
     cursor = connection.cursor()
 
-    query = f"SELECT * FROM {table_name} ORDER BY ID ASC;"
+    query = f"SELECT * FROM genpact.{table_name} ORDER BY ID ASC;"
     cursor.execute(query)
     data = cursor.fetchall()
 
@@ -190,7 +196,7 @@ def fetch_data(table_name):
 
     return pd.DataFrame(data, columns=column_names)
 
-def fetch_data_1(table_name):
+def fetch_data_1(table_name,air_codes):
     connection_params = {
         'host': 'database-1.cmeaoe1g4zcd.ap-south-1.rds.amazonaws.com',
         'port': '5432',
@@ -202,8 +208,8 @@ def fetch_data_1(table_name):
     connection = psycopg2.connect(**connection_params)
     cursor = connection.cursor()
 
-    query = f"SELECT * FROM table57 ;"
-    cursor.execute(query)
+    query = f"SELECT * FROM genpact.air_code WHERE air_code IN %s;"
+    cursor.execute(query, (tuple(air_codes),))
     data = cursor.fetchall()
 
     column_names = [desc[0] for desc in cursor.description]
@@ -211,6 +217,8 @@ def fetch_data_1(table_name):
     connection.close()
 
     return pd.DataFrame(data, columns=column_names)
+
+
 # Function to update data in a table in the database
 def update_data(original_data, updated_data, table_name, columns):
     connection_params = {
@@ -229,6 +237,7 @@ def update_data(original_data, updated_data, table_name, columns):
 
         if not row.equals(original_row):
             update_location_in_db(cursor, row, table_name, columns)
+    
 
     connection.commit()
     connection.close()
@@ -257,7 +266,7 @@ def update_location_in_db(cursor, row, table_name, columns):
 
         update_columns_str = ', '.join(update_columns)
 
-        query = f"UPDATE {table_name} SET {update_columns_str} WHERE id = '{row['id']}';"
+        query = f"UPDATE genpact.{table_name} SET {update_columns_str} WHERE id = '{row['id']}';"
         print("Update Query:", query)
         cursor.execute(query)
 
@@ -277,6 +286,118 @@ def update_location(row):
         return geometry['lat'], geometry['lng']
     else:
         return 0, 0
+
+
+def create_air_code_column(table_name):
+    # Connection parameters
+    connection_params = {
+        'host': 'database-1.cmeaoe1g4zcd.ap-south-1.rds.amazonaws.com',
+        'port': '5432',
+        'database': 'postgres',
+        'user': 'postgres',
+        'password': 'postgres'
+    }
+
+    # Establish the database connection
+    connection = psycopg2.connect(**connection_params)
+    cursor = connection.cursor()
+
+    try:
+        # Check if the column already exists
+        check_column_query = f'''
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'genpact.{table_name}' AND column_name = 'air_code';
+        '''
+
+        cursor.execute(check_column_query)
+        column_exists = cursor.fetchone()
+
+        if not column_exists:
+            # If the column doesn't exist, add it
+            add_column_query = f'''
+                ALTER TABLE "genpact.{table_name}"
+                ADD COLUMN air_code VARCHAR;  -- Adjust the data type if needed
+            '''
+
+            cursor.execute(add_column_query)
+            print("Column 'air_code' added to table.")
+
+        else:
+            print("Column 'air_code' already exists in the table.")
+
+        # Commit the changes to the database
+        connection.commit()
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+    finally:
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+
+def correct_spelling(description, correct_descriptions):
+    match, score = process.extractOne(description, correct_descriptions)
+    threshold = 80
+    return match if score >= threshold else description
+
+def update_air_code_column(table_name, air_code_table):
+    # Connection parameters
+    connection_params = {
+        'host': 'database-1.cmeaoe1g4zcd.ap-south-1.rds.amazonaws.com',
+        'port': '5432',
+        'database': 'postgres',
+        'user': 'postgres',
+        'password': 'postgres'
+    }
+    
+    # db_connection = sql.connect(host='database-1.cmeaoe1g4zcd.ap-south-1.rds.amazonaws.com', 
+        # database="postgres", user='postgres', password='postgres')
+
+    # engine = create_engine(f"postgresql://{connection_params['postgres']}:{connection_params['postgres']}@{connection_params['database-1.cmeaoe1g4zcd.ap-south-1.rds.amazonaws.com']}:{connection_params['5432']}/{connection_params['postgres']}")
+
+    # Establish the database connection
+    connection = psycopg2.connect(**connection_params)
+    cursor = connection.cursor()
+
+    try:
+        
+
+
+        add_column_query = f'''
+                ALTER TABLE genpact.{table_name}
+                ADD COLUMN air_code VARCHAR;  
+            '''
+
+        cursor.execute(add_column_query)
+
+        update_query = f'''
+            UPDATE genpact.{table_name} AS t
+            SET air_code = ac.air_code
+            FROM genpact.{air_code_table} AS ac
+            WHERE t.description = ac.air_construction_description;
+        '''
+        print("-------------------")
+        print(update_query)
+        print("-------------------")
+        # Execute the update query
+        cursor.execute(update_query)
+
+        # Commit the changes to the database
+        connection.commit()
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+    finally:
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+
+
 
 # def fetch_global_headers_from_database(workspace_name):
 #     connection_params = {
@@ -373,7 +494,7 @@ def update_table_name(workspace,table_name,user_id,file_name):
     connection = psycopg2.connect(**connection_params)
     cursor = connection.cursor()
 
-    insert_query=f"INSERT INTO workspace_history (workspace_name,table_name,user_id,filename) VALUES('{workspace}','{table_name}','{user_id}','{file_name}');"
+    insert_query=f"INSERT INTO genpact.workspace_history (workspace_name,table_name,user_id,filename) VALUES('{workspace}','{table_name}','{user_id}','{file_name}');"
     
     cursor.execute(insert_query)
     # st.success("Global Headers saved successfully!")
@@ -382,6 +503,11 @@ def update_table_name(workspace,table_name,user_id,file_name):
     connection.commit()
     cursor.close()
     connection.close()
+
+
+
+
+
 def insert_user_credentials(username, password):
     connection_params = {
         'host': 'database-1.cmeaoe1g4zcd.ap-south-1.rds.amazonaws.com',
@@ -398,7 +524,7 @@ def insert_user_credentials(username, password):
 
         hashed_password = hash_password(password)
 
-        cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s);", (username, hashed_password))
+        cursor.execute("INSERT INTO genpact.users (username, password) VALUES (%s, %s);", (username, hashed_password))
 
         connection.commit()
         cursor.close()
@@ -428,7 +554,7 @@ def fetch_user_credentials(username, password):
         cursor = connection.cursor()
 
         # Fetch hashed password from the 'users' table for the provided username
-        cursor.execute("SELECT user_id,password FROM users WHERE username = %s;", (username,))
+        cursor.execute("SELECT user_id,password FROM genpact.users WHERE username = %s;", (username,))
         user_data = cursor.fetchone()
         
         print("userdata",user_data)
@@ -485,7 +611,7 @@ def show_annotation(sel):
 with st.sidebar:
     st.image("genpactlogo.png",width=170)
     selected = option_menu("EXPOSURE MANAGEMENT", ["SignUP","Login Page","Workspaces", "Data Upload", 'Update Data','Analytics'], menu_icon="chevron-down", default_index=0)
-
+ 
 st.session_state.result = None
 
 
@@ -542,7 +668,7 @@ if st.session_state.user_id !=0:
                 }
                 connection = psycopg2.connect(**connection_params)
                 cursor = connection.cursor()
-                cursor.execute("SELECT MAX(id) FROM workspaces;")
+                cursor.execute("SELECT MAX(id) FROM genpact.workspaces;")
                 latest_user_id = cursor.fetchone()[0]
                 id = 1 if latest_user_id is None else latest_user_id + 1
                 st.session_state.workspace_name = workspace_name
@@ -598,13 +724,13 @@ if st.session_state.user_id !=0:
                 connection = psycopg2.connect(**connection_params)
                 cursor = connection.cursor()
                 
-                cursor.execute(f"SELECT filename, table_name FROM workspace_history WHERE user_id={user_id} AND workspace_name='{selected_workspace}';")
+                cursor.execute(f"SELECT filename, table_name FROM genpact.workspace_history WHERE user_id={user_id} AND workspace_name='{selected_workspace}';")
                 files_and_tables = cursor.fetchall()
 
                 # st.write(f"You selected workspace: {selected_workspace}")
 
 
-                cursor.execute(f"SELECT DISTINCT filename FROM workspace_history WHERE user_id={user_id} AND workspace_name='{selected_workspace}';")
+                cursor.execute(f"SELECT DISTINCT filename FROM genpact.workspace_history WHERE user_id={user_id} AND workspace_name='{selected_workspace}';")
                 available_files = [row[0] for row in cursor.fetchall()]
 
 
@@ -621,33 +747,137 @@ if st.session_state.user_id !=0:
         if uploaded_file is not None:
             file_name = uploaded_file.name
             file_info = pd.ExcelFile(uploaded_file)
-
+            
+            # Selecting Sheets
             st.write("### Sheet Names")
             sheet_names = file_info.sheet_names
-            selected_sheet = st.selectbox("Select Sheet:", sheet_names, key='sheet_dropdown')
-            
-            data = pd.read_excel(file_info, sheet_name=selected_sheet)
-            file_name=file_name.replace(' ','_').replace('.xlsx','')
-            #  filename_sheetname
-            file_name=f"{file_name}_{selected_sheet}"
-            st.session_state.uploaded_file_name = file_name
-            data.columns = [col.lower().replace(' ', '_').replace('/','') for col in data.columns]
+            all_sheets_option="Select All"
+            selected_sheets = st.multiselect("Select Sheet:", [all_sheets_option]+sheet_names, key='sheet_dropdown')
+            print(selected_sheets)
 
-            st.write("### Select Attributes")
-            all_columns_option = "Select All"
-            selected_columns = st.multiselect("Columns", [all_columns_option] + data.columns.tolist())
+            #Selecting columns or rows 
+            display_option = st.radio("Select Display Option:", ['Rows', 'Columns'])
 
-            if all_columns_option in selected_columns:
-                selected_columns = data.columns.tolist()
 
-            # # updated_data = st.data_editor(data)
-            
-            # selected_columns = st.multiselect("Columns", data.columns.tolist())
+            if display_option=='Columns':
+                join_option = st.radio("Select Join Option", ["With Join", "Without Join"])
+                
+                if join_option == "With Join":
+                    join=[]
+                    all_data=pd.DataFrame()
+                    
+                    st.write(f"#### {selected_sheets[0]}")
+                
+                    data0 = pd.read_excel(file_info, sheet_name=selected_sheets[0])
+                    file_name=file_name.replace(' ','_').replace('.xlsx','')
+                    #  filename_sheetname
+                    file_name=f"{file_name}_{selected_sheets[0]}"
+                    st.session_state.uploaded_file_name = file_name
+                    data0.columns = [col.lower().replace(' ', '_').replace('/','') for col in data0.columns]
+                    
 
+                    data1 = pd.read_excel(file_info, sheet_name=selected_sheets[1])
+                    file_name=file_name.replace(' ','_').replace('.xlsx','')
+                    #  filename_sheetname
+                    file_name=f"{file_name}_{selected_sheets[0]}"
+                    st.session_state.uploaded_file_name = file_name
+                    data1.columns = [col.lower().replace(' ', '_').replace('/','') for col in data1.columns]
+                    
+                    #Selecting the columns
+                    st.write("### Select Attributes")
+                    j0=st.selectbox("Column",data0.columns)
+                    join.append(j0)
+                    print(join)
+
+                    st.write("### Select Attributes")
+                    j1=st.selectbox("Columns",data1.columns)
+                    join.append(j1)
+                    print(join)
+                    all_selected_sheets_columns=data0.columns.tolist()
+                    all_selected_sheets_columns+=data1.columns.tolist()
+                    selected_columns=all_selected_sheets_columns
+                    all_data = pd.merge(data0, data1, how='outer', left_on=join[0], right_on=join[1])
+                    # all_data=all_data.drop(join[0],axis=1)
+                    # all_data=all_data.drop(join[1],axis=1)
+                    correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
+                    all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+
+                    print(all_data)
+                   
+                else:
+                    all_selected_sheets_columns=[]
+                    all_data=pd.DataFrame()
+                    for selected_sheet in selected_sheets:
+                        st.write(f"#### {selected_sheet}")
+                    
+                        data = pd.read_excel(file_info, sheet_name=selected_sheet)
+                        file_name=file_name.replace(' ','_').replace('.xlsx','')
+                        #  filename_sheetname
+                        file_name=f"{file_name}_{selected_sheet}"
+                        st.session_state.uploaded_file_name = file_name
+                        data.columns = [col.lower().replace(' ', '_').replace('/','') for col in data.columns]
+                        
+                        #Selecting the columns
+                        st.write("### Select Attributes")
+                        all_columns_option = "Select All"
+                        selected_columns = st.multiselect("Columns", [all_columns_option] + data.columns.tolist())
+                        all_selected_sheets_columns+=selected_columns
+
+                        if all_columns_option in selected_columns:
+                            selected_columns = data.columns.tolist()
+                            all_selected_sheets_columns+=selected_columns
+                        # all_data = pd.concat([all_data,data], ignore_index=True)
+                        
+
+                        if not all_data.empty:
+                            new_columns = [col for col in data.columns if col not in all_data.columns]
+                            all_data = pd.concat([all_data, data[new_columns]], axis=1)
+                            print("//////all data////",all_data)
+                        else:
+                            all_data = data.copy()
+                    correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
+                    all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+
+
+            elif display_option=='Rows':
+                all_selected_sheets_columns=[]
+                all_data=pd.DataFrame()
+                for selected_sheet in selected_sheets:
+                    st.write(f"#### {selected_sheet}")
+                
+                    data = pd.read_excel(file_info, sheet_name=selected_sheet)
+                    file_name=file_name.replace(' ','_').replace('.xlsx','')
+                    #  filename_sheetname
+                    file_name=f"{file_name}_{selected_sheet}"
+                    st.session_state.uploaded_file_name = file_name
+                    data.columns = [col.lower().replace(' ', '_').replace('/','') for col in data.columns]
+                    all_data = pd.concat([all_data,data], ignore_index=True)
+
+                #Selecting the columns
+                st.write("### Select Attributes")
+                all_columns_option = "Select All"
+                selected_columns = st.multiselect("Columns", [all_columns_option] + data.columns.tolist())
+                all_selected_sheets_columns=selected_columns
+
+                if all_columns_option in selected_columns:
+                    selected_columns = data.columns.tolist()
+                    all_selected_sheets_columns=data.columns.tolist()
+                
+                # print("//////all data////",all_data)
+                correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
+                all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+
+                    
+
+            air_code_table_name="air_code"
             if st.button('Submit', key='create_table_button') and selected_columns:
-                table_name = f"table{np.random.randint(100)}"
-                create_dynamic_table(table_name, selected_columns, data)
+                table_name = f"table{np.random.randint(10000)}"
+                create_dynamic_table(table_name, all_selected_sheets_columns,all_data)
                 update_table_name(workspace_name, table_name,user_id,file_name)
+                st.session_state.table_name = table_name
+                # {table_name}['description']=table_name['description'].apply(correct_spelling)
+
+                update_air_code_column(table_name,air_code_table_name)
                 st.success(f'Submitted Successfully!')
                 st.session_state.table_name = table_name
             # Retrieve the workspace name from session state
@@ -657,8 +887,10 @@ if st.session_state.user_id !=0:
             st.experimental_set_query_params(selected=workspace_name)
 
     if selected == 'Update Data' or st.session_state.selected == 'Update Data':
+            
             user_id=st.session_state.user_id
             workspace_name = st.session_state.workspace_name
+            table_name=st.session_state.table_name
             selected_workspace = st.experimental_get_query_params().get('selected', [None])[0]
 
             connection_params = {
@@ -692,8 +924,10 @@ if st.session_state.user_id !=0:
             st.write(f"Sheet Name: {selected_file}")
 
 
-            cursor.execute(f"SELECT table_name FROM workspace_history WHERE user_id={user_id} AND workspace_name='{selected_workspace}' AND filename='{selected_file}';")
+            cursor.execute(f"SELECT table_name FROM genpact.workspace_history WHERE user_id={user_id} AND workspace_name='{selected_workspace}' AND filename='{selected_file}';")
             selected_table = cursor.fetchone()[0]
+
+            print("------------------------------",selected_table)
 
 
             # st.write(f"Associated Table Name: {selected_table}")
@@ -704,15 +938,16 @@ if st.session_state.user_id !=0:
             if table_data.empty:
                 st.warning(f'Table "{selected_table}" not found.')
             else:
-                location_col_index = table_data.columns.get_loc('location')
-                print(location_col_index)
+                # location_col_index = table_data.columns.get_loc('location')
+                # print(location_col_index)
 
-                styled_data = table_data.style.apply(lambda x: ['background-color: green' if i == location_col_index else '' for i in range(len(x))])
+                # styled_data = table_data.style.apply(lambda x: ['background-color: green' if i == location_col_index else '' for i in range(len(x))])
 
                 st.write("### Data")
                 updated_data = st.data_editor(data=table_data)
                 
- 
+                air_code_values = updated_data['air_code'].tolist()
+               
                 # st.write("### Data")
                 # location_col_index = table_data.columns.get_loc('location') + 1  # Adjust for 1-based indexing
 
@@ -734,14 +969,18 @@ if st.session_state.user_id !=0:
                     file_name=f"updated_data_{selected_table}.csv",
                     key='download_button'
                 )
-                cursor.execute(f"SELECT * from table57 limit 50;")
-                selected_table_policy = cursor.fetchone()[0]
-                table_data_policy= fetch_data_1(selected_table_policy)
+
+                selected_table_policy = "air_code"
+                table_data_policy= fetch_data_1(selected_table_policy,air_code_values)
 
 
                
                 st.write("Lookup Table")
                 st.dataframe(data=table_data_policy)
+
+                
+
+ 
                 
 
 
