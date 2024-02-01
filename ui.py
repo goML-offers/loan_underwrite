@@ -744,10 +744,11 @@ if st.session_state.user_id !=0:
         
         workspace_name=st.session_state.workspace_name
         user_id=st.session_state.user_id
+
         if uploaded_file is not None:
             file_name = uploaded_file.name
             file_info = pd.ExcelFile(uploaded_file)
-            
+            data=pd.DataFrame()
             # Selecting Sheets
             st.write("### Sheet Names")
             sheet_names = file_info.sheet_names
@@ -773,7 +774,7 @@ if st.session_state.user_id !=0:
                     #  filename_sheetname
                     file_name=f"{file_name}_{selected_sheets[0]}"
                     st.session_state.uploaded_file_name = file_name
-                    data0.columns = [col.lower().replace(' ', '_').replace('/','') for col in data0.columns]
+                    data0.columns = [col.lower().replace(' ', '_').replace('/','_').replace('.','_') for col in data0.columns]
                     
 
                     data1 = pd.read_excel(file_info, sheet_name=selected_sheets[1])
@@ -781,7 +782,7 @@ if st.session_state.user_id !=0:
                     #  filename_sheetname
                     file_name=f"{file_name}_{selected_sheets[0]}"
                     st.session_state.uploaded_file_name = file_name
-                    data1.columns = [col.lower().replace(' ', '_').replace('/','') for col in data1.columns]
+                    data1.columns = [col.lower().replace(' ', '_').replace('/','_').replace(".","_") for col in data1.columns]
                     
                     #Selecting the columns
                     st.write("### Select Attributes")
@@ -799,8 +800,11 @@ if st.session_state.user_id !=0:
                     all_data = pd.merge(data0, data1, how='outer', left_on=join[0], right_on=join[1])
                     # all_data=all_data.drop(join[0],axis=1)
                     # all_data=all_data.drop(join[1],axis=1)
-                    correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
-                    all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+                    if 'description' in all_data.columns:
+                        correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
+                        all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+                    else:
+                        st.warning("Warning: 'description' column not found in the DataFrame.")
 
                     print(all_data)
                    
@@ -815,7 +819,7 @@ if st.session_state.user_id !=0:
                         #  filename_sheetname
                         file_name=f"{file_name}_{selected_sheet}"
                         st.session_state.uploaded_file_name = file_name
-                        data.columns = [col.lower().replace(' ', '_').replace('/','') for col in data.columns]
+                        data.columns = [col.lower().replace(' ', '_').replace('/','_').replace('.','_') for col in data.columns]
                         
                         #Selecting the columns
                         st.write("### Select Attributes")
@@ -835,9 +839,15 @@ if st.session_state.user_id !=0:
                             print("//////all data////",all_data)
                         else:
                             all_data = data.copy()
-                    correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
-                    all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+                    # correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
+                    # all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+                    if 'description' in all_data.columns:
+                        correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
+                        all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+                    else:
+                        st.warning("Warning: 'description' column not found in the DataFrame.")
 
+              
 
             elif display_option=='Rows':
                 all_selected_sheets_columns=[]
@@ -850,7 +860,7 @@ if st.session_state.user_id !=0:
                     #  filename_sheetname
                     file_name=f"{file_name}_{selected_sheet}"
                     st.session_state.uploaded_file_name = file_name
-                    data.columns = [col.lower().replace(' ', '_').replace('/','') for col in data.columns]
+                    data.columns = [col.lower().replace(' ', '_').replace('/','_').replace('.','_') for col in data.columns]
                     all_data = pd.concat([all_data,data], ignore_index=True)
 
                 #Selecting the columns
@@ -864,8 +874,13 @@ if st.session_state.user_id !=0:
                     all_selected_sheets_columns=data.columns.tolist()
                 
                 # print("//////all data////",all_data)
-                correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
-                all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+                # correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
+                # all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+                if 'description' in all_data.columns:
+                    correct_descriptions = ['Wood frame', 'Light wood frame', 'woodframe', 'light wood frame']
+                    all_data['description'] = all_data['description'].apply(lambda x: correct_spelling(x, correct_descriptions))
+                else:
+                    st.warning("Warning: 'description' column not found in the DataFrame.")
 
                     
 
@@ -946,7 +961,8 @@ if st.session_state.user_id !=0:
                 st.write("### Data")
                 updated_data = st.data_editor(data=table_data)
                 
-                air_code_values = updated_data['air_code'].tolist()
+                if 'air_code' in updated_data.columns:
+                    air_code_values = updated_data['air_code'].tolist()
                
                 # st.write("### Data")
                 # location_col_index = table_data.columns.get_loc('location') + 1  # Adjust for 1-based indexing
@@ -958,25 +974,38 @@ if st.session_state.user_id !=0:
                 # st.markdown(styled_data, unsafe_allow_html=True)
                 # updated_data = st.data_editor(data=table_data)
                 
-                if st.button('Update', key='save_changes_button'):
-                    update_data(table_data, updated_data, selected_table, table_data.columns)
-                    st.rerun()
-                    st.success('Updated successfully!')
+                    if st.button('Update', key='save_changes_button'):
+                        update_data(table_data, updated_data, selected_table, table_data.columns)
+                        st.rerun()
+                        st.success('Updated successfully!')
 
-                download_button = st.download_button(
-                    label="Download",
-                    data=updated_data.to_csv(index=False).encode('utf-8'),
-                    file_name=f"updated_data_{selected_table}.csv",
-                    key='download_button'
-                )
+                    download_button = st.download_button(
+                        label="Download",
+                        data=updated_data.to_csv(index=False).encode('utf-8'),
+                        file_name=f"updated_data_{selected_table}.csv",
+                        key='download_button'
+                    )
 
-                selected_table_policy = "air_code"
-                table_data_policy= fetch_data_1(selected_table_policy,air_code_values)
+                    selected_table_policy = "air_code"
+                    table_data_policy= fetch_data_1(selected_table_policy,air_code_values)
 
 
-               
-                st.write("Lookup Table")
-                st.dataframe(data=table_data_policy)
+                
+                    st.write("Lookup Table")
+                    st.dataframe(data=table_data_policy)
+                else:
+                    if st.button('Update', key='save_changes_button'):
+                        update_data(table_data, updated_data, selected_table, table_data.columns)
+                        st.rerun()
+                        st.success('Updated successfully!')
+
+                    download_button = st.download_button(
+                        label="Download",
+                        data=updated_data.to_csv(index=False).encode('utf-8'),
+                        file_name=f"updated_data_{selected_table}.csv",
+                        key='download_button'
+                    )
+                    st.warning("Warning: 'Description' column not found in the file")
 
                 
 
